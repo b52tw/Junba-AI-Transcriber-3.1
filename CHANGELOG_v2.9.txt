@@ -1,0 +1,32 @@
+Junba AI Transcriber v2.9 更新重點
+=================================
+
+1. 修正 Intel NPU 真正進入推論後的 Level Zero 執行期錯誤處理
+   - 辨識 ZE_RESULT_ERROR_INVALID_ARGUMENT / 0x78000004
+   - 辨識 pfnAppendGraphExecute / zeGraphSetArgumentValue / infer_request.cpp:246
+   - 不再因單一 NPU 推論錯誤終止整個工作
+
+2. 新增三段式自動備援
+   - Intel NPU 正常模式
+   - NPU 相容模式（重新建立 Pipeline，DISABLE_OPENVINO_GENAI_NPU_L0=1；支援時強制 Compiler-in-Plugin）
+   - Intel GPU / OpenVINO
+   - OpenVINO CPU
+   同一個音檔區段會原地重試，不需重新選檔或重新切割。
+
+3. Intel GPU 若推論失敗，自動改用 OpenVINO CPU 完成該區段。
+
+4. 備援成功後，後續區段直接沿用已成功的裝置，不會每一段重新撞同一個 NPU 錯誤。
+
+5. 匯出的 engine 欄位會記錄實際裝置與自動備援歷程。
+
+6. 硬體偵測增加 Intel NPU 詳細資訊（若 OpenVINO/Driver 提供）：
+   FULL_DEVICE_NAME / DEVICE_ARCHITECTURE / NPU_DRIVER_VERSION /
+   NPU_COMPILER_VERSION / NPU_COMPILER_TYPE / NPU_MAX_TILES。
+
+7. NPU 選項標示為「實驗／省電」。自動效能模式仍優先：
+   NVIDIA CUDA → Intel GPU/OpenVINO → Intel NPU/OpenVINO → CPU。
+
+8. 新增 Whisper large-v3-turbo 選項。
+   對 16GB RAM / Intel NPU-GPU 系統，可先用 large-v3-turbo 或 small 測試。
+
+9. 新增 NPU fallback 單元測試；本地測試共 21 passed。

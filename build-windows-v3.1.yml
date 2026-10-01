@@ -1,0 +1,165 @@
+name: Build Windows EXE v3.1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    paths:
+      - '**.py'
+      - '**.spec'
+      - 'requirements.txt'
+      - '.github/workflows/build-windows-v3.1.yml'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 100
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11 x64
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          architecture: 'x64'
+          cache: 'pip'
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+          python -m pip check
+
+      - name: Verify pinned OpenVINO ABI trio
+        shell: pwsh
+        run: |
+          python -c "import importlib.metadata as m; a=m.version('openvino'); b=m.version('openvino-tokenizers'); c=m.version('openvino-genai'); print('openvino=',a); print('openvino-tokenizers=',b); print('openvino-genai=',c); assert a=='2026.4.0'; assert b=='2026.4.0.0'; assert c=='2026.4.0.0'"
+          python -c "import openvino, openvino_tokenizers, openvino_genai; print('OpenVINO tokenizer extension source import OK'); print('devices:', openvino.Core().available_devices)"
+
+      - name: Source syntax and functional tests
+        shell: pwsh
+        run: |
+          python -m compileall -q main.py app tests
+          pytest -q tests
+
+      - name: Source GUI offscreen smoke test
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          python main.py --ui-self-test "$pwd/UI_SELFTEST_SOURCE.txt"
+          Get-Content "$pwd/UI_SELFTEST_SOURCE.txt"
+          if (-not (Select-String -Path "$pwd/UI_SELFTEST_SOURCE.txt" -Pattern "UI_SELFTEST_OK" -Quiet)) { throw "Source UI self-test failed" }
+
+      # Portable is built/tested/uploaded FIRST. Even if one-file later proves
+      # incompatible with a Windows DLL loader edge case, the stable portable
+      # artifact is already available to the user.
+      - name: Build portable version first
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean JunbaAITranscriber_portable.spec
+          if (!(Test-Path "dist/Junba_AI_Transcriber_v3.1_Portable/Junba_AI_Transcriber_v3.1.exe")) { throw "Portable EXE not found" }
+
+      - name: Test OpenVINO Tokenizers DLL in portable EXE
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $exe = "$pwd/dist/Junba_AI_Transcriber_v3.1_Portable/Junba_AI_Transcriber_v3.1.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--openvino-binary-self-test", "$pwd/release/OPENVINO_BINARY_PORTABLE.txt" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "release/OPENVINO_BINARY_PORTABLE.txt"; throw "Portable OpenVINO Tokenizers DLL test failed" }
+          Get-Content "release/OPENVINO_BINARY_PORTABLE.txt"
+          if (-not (Select-String -Path "release/OPENVINO_BINARY_PORTABLE.txt" -Pattern "OPENVINO_BINARY_SELFTEST_OK" -Quiet)) { throw "Portable tokenizers marker missing" }
+
+      - name: General self-tests portable EXE
+        shell: pwsh
+        run: |
+          $exe = "$pwd/dist/Junba_AI_Transcriber_v3.1_Portable/Junba_AI_Transcriber_v3.1.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--windowed-io-self-test", "$pwd/release/WINDOWED_IO_PORTABLE.txt" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Portable windowed I/O self-test failed" }
+          $p = Start-Process -FilePath $exe -ArgumentList "--self-test", "$pwd/release/SELFTEST_PORTABLE.txt" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Portable self-test failed" }
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $p = Start-Process -FilePath $exe -ArgumentList "--ui-self-test", "$pwd/release/UI_SELFTEST_PORTABLE.txt" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Portable UI self-test failed" }
+
+      - name: Package and upload portable artifact
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/Junba_AI_Transcriber_v3.1_Portable/*" -DestinationPath "release/Junba_AI_Transcriber_v3.1_Portable_Windows_x64.zip" -Force
+          @"
+          Junba AI Transcriber v3.1 Portable
+          OpenVINO ABI trio: 2026.4.0 / 2026.4.0.0 / 2026.4.0.0
+          OpenVINO Tokenizers DLL test: PASS
+          Portable is the recommended build for Intel NPU/GPU.
+          "@ | Set-Content -Path "release/BUILD_INFO_PORTABLE.txt" -Encoding UTF8
+
+      - name: Upload portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Junba-AI-Transcriber-v3.1-Portable-Windows-x64
+          path: |
+            release/Junba_AI_Transcriber_v3.1_Portable_Windows_x64.zip
+            release/BUILD_INFO_PORTABLE.txt
+            release/OPENVINO_BINARY_PORTABLE.txt
+            release/SELFTEST_PORTABLE.txt
+            release/UI_SELFTEST_PORTABLE.txt
+            release/WINDOWED_IO_PORTABLE.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Build single EXE
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean JunbaAITranscriber_onefile.spec
+          if (!(Test-Path "dist/Junba_AI_Transcriber_v3.1.exe")) { throw "One-file EXE not found" }
+
+      - name: Test OpenVINO Tokenizers DLL in single EXE
+        shell: pwsh
+        run: |
+          $exe = "$pwd/dist/Junba_AI_Transcriber_v3.1.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--openvino-binary-self-test", "$pwd/release/OPENVINO_BINARY_SINGLE.txt" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "release/OPENVINO_BINARY_SINGLE.txt"; throw "Single EXE OpenVINO Tokenizers DLL test failed" }
+          Get-Content "release/OPENVINO_BINARY_SINGLE.txt"
+          if (-not (Select-String -Path "release/OPENVINO_BINARY_SINGLE.txt" -Pattern "OPENVINO_BINARY_SELFTEST_OK" -Quiet)) { throw "Single tokenizers marker missing" }
+
+      - name: General self-tests single EXE
+        shell: pwsh
+        run: |
+          $exe = "$pwd/dist/Junba_AI_Transcriber_v3.1.exe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--windowed-io-self-test", "$pwd/release/WINDOWED_IO_SINGLE.txt" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Single windowed I/O self-test failed" }
+          $p = Start-Process -FilePath $exe -ArgumentList "--self-test", "$pwd/release/SELFTEST_SINGLE.txt" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Single self-test failed" }
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $p = Start-Process -FilePath $exe -ArgumentList "--ui-self-test", "$pwd/release/UI_SELFTEST_SINGLE.txt" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Single UI self-test failed" }
+
+      - name: Package single EXE
+        shell: pwsh
+        run: |
+          Copy-Item "dist/Junba_AI_Transcriber_v3.1.exe" "release/Junba_AI_Transcriber_v3.1.exe"
+          $hash = (Get-FileHash "release/Junba_AI_Transcriber_v3.1.exe" -Algorithm SHA256).Hash
+          @"
+          Junba AI Transcriber v3.1 Single EXE
+          OpenVINO ABI trio: 2026.4.0 / 2026.4.0.0 / 2026.4.0.0
+          OpenVINO Tokenizers DLL test: PASS
+          SHA256: $hash
+          "@ | Set-Content -Path "release/BUILD_INFO_SINGLE.txt" -Encoding UTF8
+
+      - name: Upload single EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Junba-AI-Transcriber-v3.1-Single-EXE-Windows-x64
+          path: |
+            release/Junba_AI_Transcriber_v3.1.exe
+            release/BUILD_INFO_SINGLE.txt
+            release/OPENVINO_BINARY_SINGLE.txt
+            release/SELFTEST_SINGLE.txt
+            release/UI_SELFTEST_SINGLE.txt
+            release/WINDOWED_IO_SINGLE.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

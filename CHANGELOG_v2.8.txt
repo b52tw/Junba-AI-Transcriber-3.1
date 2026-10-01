@@ -1,0 +1,37 @@
+Junba AI Transcriber v2.9
+=========================
+
+本版針對 v2.7 Intel NPU/GPU OpenVINO Windows 封裝錯誤修正。
+
+1. 修正 openvino_tokenizers.dll WinError 126/127
+   - 固定 openvino 2026.4.0
+   - 固定 openvino-tokenizers 2026.4.0.0
+   - 固定 openvino-genai 2026.4.0.0
+   - 三者 MAJOR.MINOR.PATCH 必須一致，避免 ABI 不相容。
+
+2. PyInstaller 明確收集 OpenVINO DLL
+   - collect_all(openvino)
+   - collect_all(openvino_tokenizers)
+   - collect_all(openvino_genai)
+   - 執行前自動加入 DLL 目錄至 Windows DLL search path。
+
+3. GitHub Actions 加強為真正 DLL 載入驗證
+   - 來源環境先驗證版本與 import。
+   - Portable EXE 建立後，實際呼叫 OpenVINO Core.add_extension(openvino_tokenizers.dll)。
+   - 測試成功才上傳 Portable Artifact。
+   - Single EXE 也執行相同測試；失敗時不會發布看似成功、實際不能用的 EXE。
+
+4. Intel NPU/GPU 建議優先使用 Portable
+   - Portable 保留 DLL 目錄結構，OpenVINO/Tokenizers/GenAI 最穩定。
+   - Single EXE 仍保留，但只在 GitHub Windows runner 的 DLL 測試通過後才發布。
+
+5. 錯誤訊息重新分類
+   - openvino_tokenizers / Cannot add extension / error 126/127：顯示 DLL/ABI 封裝問題。
+   - 真正進到 NPU/GPU 編譯後才顯示驅動、記憶體或相容模式建議。
+
+保留既有功能：
+- Intel AI Boost NPU / Intel Arc GPU / NVIDIA CUDA / Intel/AMD CPU
+- Google Gemini、多講者、時間戳、繁體中文
+- 音檔切割/合併
+- 暫停/繼續/立即停止並輸出目前結果
+- Word/TXT/SRT/VTT

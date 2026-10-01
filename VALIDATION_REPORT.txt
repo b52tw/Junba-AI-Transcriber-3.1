@@ -1,0 +1,24 @@
+峻爸 AI Transcriber v3.1 Validation Report
+
+本地可執行檢查：
+- Python compileall：PASS
+- pytest：26 passed, 1 skipped
+- 新增自適應測試：PASS
+  * 無 GPU/NPU 時 CPU 保底
+  * 效能優先選 CUDA
+  * 省電優先選 Intel NPU
+  * 舊 auto 設定相容
+  * 低記憶體自動模型採保守選擇
+
+GitHub Windows runner 會另外驗證：
+- PySide6 offscreen UI self-test
+- 介面版本 v3.1
+- 介面顯示「峻爸」
+- 自動自適應 / 效能優先 / 省電優先選項存在
+- 自動模型選項存在
+- OpenVINO ABI / tokenizers DLL
+- Portable EXE self-test
+- Single EXE self-test
+
+限制說明：
+GitHub hosted runner 沒有使用者實際的 Intel NPU / Intel Arc / NVIDIA GPU，因此真正硬體推論仍需在目標電腦執行；v3.1 的設計重點是偵測、降級與 CPU 保底，避免因某一硬體不可用而整個程式失效。

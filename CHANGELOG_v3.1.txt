@@ -1,0 +1,36 @@
+Junba AI Transcriber v3.1 — Adaptive Hardware Edition
+介面顯示名稱：峻爸 AI Transcriber v3.1
+
+本版重點
+1. 跨電腦硬體自適應
+   - 自動偵測 NVIDIA CUDA、Intel OpenVINO GPU/NPU、Intel/AMD CPU。
+   - 新增「自動自適應」「效能優先」「省電優先」三種策略。
+   - 新電腦第一次使用會依可用硬體選路；之後會依本機成功/失敗紀錄調整優先順序。
+   - NPU/GPU/CUDA 執行失敗時，盡量在同一區段改用下一個可用路徑，不需重新選檔。
+   - Intel/AMD CPU 永遠保留為安全保底。
+   - 偵測到 AMD GPU 但目前無本版可用 GPU 後端時，不硬啟動不相容裝置，直接使用 CPU 保底。
+
+2. 模型自動選擇
+   - Whisper 模型新增「自動（依硬體／記憶體）」。
+   - 依硬體與 RAM 保守選 large-v3 / large-v3-turbo / medium / small。
+   - 仍可手動指定模型。
+
+3. 本機硬體學習紀錄
+   - 每台 Windows 電腦各自保存成功/失敗紀錄，不會跟 Portable EXE 一起搬到其他電腦。
+   - 設定頁可清除硬體學習紀錄並重新自適應。
+
+4. 執行監看與完成摘要
+   - 保留 v3.0 心跳、實際裝置、總耗時、本階段耗時、目前檔案/區段。
+   - 完成視窗會直接顯示總耗時與最終裝置。
+
+5. 介面作者名稱
+   - 僅介面顯示改為「峻爸」。
+   - 視窗標題與程式顯示名稱：峻爸 AI Transcriber v3.1。
+   - 內部程式識別、QSettings、Windows Credential、快取資料夾、GitHub/EXE 檔名仍維持 Junba 英文名稱，避免破壞舊版相容性。
+
+6. 既有功能保留
+   - 音檔切割/合併、先切割再辨識、批次轉錄。
+   - faster-whisper / OpenVINO / Gemini / 混合模式。
+   - 台灣繁體中文輸出。
+   - 多人講者 / 字詞時間戳 / Word TXT SRT VTT。
+   - 暫停 / 繼續 / 立即停止並輸出目前結果。
